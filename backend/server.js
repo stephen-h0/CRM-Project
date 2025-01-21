@@ -1,16 +1,20 @@
 const express = require('express'); // Import Express
+const cors = require('cors'); // Import CORS
 const pool = require('./db'); // Import the database connection
 
 const app = express(); // Initialize Express
 const PORT = 3000; // Define the server port
 
-app.use(express.json()); // Enable JSON body parsing
+// Enable CORS middleware
+app.use(cors());
+
+// Enable JSON body parsing
+app.use(express.json());
 
 // Welcome route
 app.get('/', (req, res) => {
   res.send('Welcome to the Profilo CRM!');
 });
-
 // GET: Fetch all customers or search for matches
 app.get('/customers', (req, res) => {
   const { q } = req.query; // Extract the 'q' parameter from the request query
