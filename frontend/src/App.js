@@ -1,54 +1,27 @@
-import React, { useState, useEffect } from "react";
-import { CSVLink } from "react-csv";
+import React, { useState, useEffect } from 'react';
+import { Route, Routes, useNavigate } from 'react-router-dom';
+import { CSVLink } from 'react-csv';
+import CustomerProfile from './components/CustomerProfile';
+import AddCustomer from './components/AddCustomer'; // Ensure this path is correct
 
-// Define the backend URL
-const BASE_URL = "http://localhost:3000"; // Adjust if hosted elsewhere
+const BASE_URL = 'http://localhost:3000';
 
-// Function to fetch customers from backend
-const getCustomers = async () => {
+// Function to fetch customers
+const fetchCustomers = async (searchTerm, page, pageSize) => {
   try {
-    const response = await fetch(`${BASE_URL}/customers`);
+    const params = new URLSearchParams();
+    if (searchTerm) params.append("q", searchTerm);
+    params.append("page", page);
+    params.append("pageSize", pageSize);
+
+    const response = await fetch(`${BASE_URL}/customers?${params.toString()}`);
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
-    return response.json(); // Parse JSON data from response
-  } catch (error) {
-    console.error("Failed to fetch customers:", error);
-    return []; // Return empty array in case of error
-  }
-};
-
-// Function to add a new customer to the backend
-const addCustomer = async (newCustomer) => {
-  try {
-    const response = await fetch(`${BASE_URL}/customers`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newCustomer),
-    });
-    if (!response.ok) {
-      throw new Error("Failed to add customer");
-    }
-    return response.json(); // Return the new customer data
-  } catch (error) {
-    console.error("Error adding customer:", error);
-  }
-};
-
-// Function to edit an existing customer
-const editCustomer = async (id, updatedCustomer) => {
-  try {
-    const response = await fetch(`${BASE_URL}/customers/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updatedCustomer),
-    });
-    if (!response.ok) {
-      throw new Error("Failed to update customer");
-    }
     return response.json();
   } catch (error) {
-    console.error("Error updating customer:", error);
+    console.error("Failed to fetch customers:", error);
+    return [];
   }
 };
 
@@ -59,7 +32,8 @@ const deleteCustomer = async (id) => {
       method: "DELETE",
     });
     if (!response.ok) {
-      throw new Error("Failed to delete customer");
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to delete customer");
     }
   } catch (error) {
     console.error("Error deleting customer:", error);
@@ -69,120 +43,108 @@ const deleteCustomer = async (id) => {
 const App = () => {
   const [customers, setCustomers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [pageSize, setPageSize] = useState(10); // Default page size 10
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchData = async () => {
-      const data = await getCustomers();
+    const loadCustomers = async () => {
+      const data = await fetchCustomers(searchTerm, currentPage, pageSize);
       setCustomers(data);
+      setTotalPages(Math.ceil(data.length / pageSize));
     };
-    fetchData();
-  }, []);
+    loadCustomers();
+  }, [searchTerm, currentPage, pageSize]);
 
-  // Filter customers based on search term
-  const filteredCustomers = customers.filter((customer) => {
-    const fullName = `${customer.FirstName || ""} ${customer.LastName || ""}`;
-    return fullName.toLowerCase().includes(searchTerm.toLowerCase());
-  });
-
-  // Handle pagination
-  const totalPages = Math.ceil(filteredCustomers.length / pageSize);
-  const currentCustomers = filteredCustomers.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
-
-  // Change the page size
-  const handlePageSizeChange = (e) => {
-    setPageSize(parseInt(e.target.value, 10));
-    setCurrentPage(1); // Reset to the first page when page size changes
+  const handleAddCustomer = () => {
+    navigate('/add-customer');
   };
 
-  // Handle adding new customer
-  const handleAddCustomer = async (newCustomer) => {
-    const addedCustomer = await addCustomer(newCustomer);
-    setCustomers([...customers, addedCustomer]);
+  const handleEditCustomer = (id) => {
+    navigate(`/customers/${id}`);
   };
 
-  // Handle editing a customer
-  const handleEditCustomer = async (id, updatedCustomer) => {
-    const updated = await editCustomer(id, updatedCustomer);
-    setCustomers(
-      customers.map((customer) =>
-        customer.CustomerID === id ? updated : customer
-      )
-    );
-  };
-
-  // Handle deleting a customer
   const handleDeleteCustomer = async (id) => {
     await deleteCustomer(id);
-    setCustomers(customers.filter((customer) => customer.CustomerID !== id));
+    const data = await fetchCustomers(searchTerm, currentPage, pageSize);
+    setCustomers(data);
   };
 
   return (
-    <div>
-      <h1>Customer List</h1>
+    <Routes>
+      <Route path="/customers/:id" element={<CustomerProfile />} />
+      <Route path="/add-customer" element={<AddCustomer />} />
+      <Route path="/" element={
+        <div>
+          <h1>Customer Management</h1>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search customers"
+          />
+          <ul>
+            {customers.map((customer) => (
+              <li key={customer.CustomerID}>
+                {`${customer.FirstName} ${customer.LastName}`} (
+                {customer.Email}, {customer.Phone})
+                <button onClick={() => handleEditCustomer(customer.CustomerID)}>
+                  Edit
+                </button>
+                <button onClick={() => handleDeleteCustomer(customer.CustomerID)}>
+                  Delete
+                </button>
+              </li>
+            ))}
+          </ul>
 
-      {/* Search box */}
-      <input
-        type="text"
-        placeholder="Search by name"
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-      />
-
-      {/* Display customer list */}
-      <ul>
-        {currentCustomers.map((customer) => (
-          <li key={customer.CustomerID}>
-            {`${customer.FirstName} ${customer.LastName}`} (
-            {customer.Email}, {customer.Phone})
-            <button onClick={() => handleEditCustomer(customer.CustomerID)}>
-              Edit
+          {/* Pagination */}
+          <div>
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(currentPage - 1)}
+            >
+              Prev
             </button>
-            <button onClick={() => handleDeleteCustomer(customer.CustomerID)}>
-              Delete
+            <span>
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(currentPage + 1)}
+            >
+              Next
             </button>
-          </li>
-        ))}
-      </ul>
+          </div>
 
-      {/* Pagination */}
-      <div>
-        <button
-          disabled={currentPage === 1}
-          onClick={() => setCurrentPage(currentPage - 1)}
-        >
-          Prev
-        </button>
-        <span>Page {currentPage} of {totalPages}</span>
-        <button
-          disabled={currentPage === totalPages}
-          onClick={() => setCurrentPage(currentPage + 1)}
-        >
-          Next
-        </button>
-      </div>
+          {/* Page Size Selector */}
+          <select value={pageSize} onChange={(e) => setPageSize(+e.target.value)}>
+            <option value={10}>10 per page</option>
+            <option value={20}>20 per page</option>
+            <option value={50}>50 per page</option>
+          </select>
 
-      {/* Page size select */}
-      <select value={pageSize} onChange={handlePageSizeChange}>
-        <option value={10}>10 per page</option>
-        <option value={20}>20 per page</option>
-        <option value={50}>50 per page</option>
-      </select>
+          {/* CSV Export */}
+          <CSVLink
+            data={customers}
+            headers={[
+              { label: "First Name", key: "FirstName" },
+              { label: "Last Name", key: "LastName" },
+              { label: "Email", key: "Email" },
+              { label: "Phone", key: "Phone" },
+              { label: "Customer ID", key: "CustomerID" },
+            ]}
+            filename="customers.csv"
+          >
+            Export to CSV
+          </CSVLink>
 
-      {/* Export to CSV */}
-      <CSVLink data={filteredCustomers} filename={"customers.csv"}>
-        Export to CSV
-      </CSVLink>
-
-      {/* Add customer button */}
-      <button onClick={() => handleAddCustomer({ FirstName: "John", LastName: "Doe", Email: "john.doe@example.com", Phone: "123456789" })}>
-        Add Customer
-      </button>
-    </div>
+          {/* Add Customer */}
+          <button onClick={handleAddCustomer}>Add Customer</button>
+        </div>
+      } />
+    </Routes>
   );
 };
 

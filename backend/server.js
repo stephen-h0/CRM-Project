@@ -15,12 +15,16 @@ app.use(express.json());
 app.get('/', (req, res) => {
   res.send('Welcome to the Profilo CRM!');
 });
+
 // GET: Fetch all customers or search for matches
 app.get('/customers', (req, res) => {
-  const { q } = req.query; // Extract the 'q' parameter from the request query
+  const { q, page = 1, pageSize = 10 } = req.query; // Extract the 'q', 'page', and 'pageSize' parameters from the request query
 
-  // Log the query parameter for debugging
-  console.log('Query parameter (q):', q);
+  // Log the query parameters for debugging
+  console.log('Query parameters:', { q, page, pageSize });
+
+  const offset = (page - 1) * pageSize;
+  const limit = parseInt(pageSize);
 
   // Define the query and parameters
   const query = q
@@ -29,10 +33,11 @@ app.get('/customers', (req, res) => {
         FirstName LIKE ? OR 
         LastName LIKE ? OR 
         Email LIKE ? OR 
-        Phone LIKE ?`
-    : 'SELECT * FROM customers';
+        Phone LIKE ?
+        LIMIT ? OFFSET ?`
+    : 'SELECT * FROM customers LIMIT ? OFFSET ?';
 
-  const params = q ? [`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`] : [];
+  const params = q ? [`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, limit, offset] : [limit, offset];
 
   // Log the constructed query and parameters
   console.log('Executing query:', query);
@@ -55,12 +60,26 @@ app.get('/customers', (req, res) => {
   });
 });
 
+// GET: Fetch a single customer by ID
+app.get('/customers/:id', (req, res) => {
+  const { id } = req.params;
+  const query = 'SELECT * FROM customers WHERE CustomerID = ?';
+  pool.query(query, [id], (err, results) => {
+    if (err) {
+      console.error('Error fetching customer:', err);
+      res.status(500).send('Error fetching customer');
+    } else if (results.length === 0) {
+      res.status(404).send('Customer not found');
+    } else {
+      res.json(results[0]); // Return the customer as JSON
+    }
+  });
+});
 
 // POST: Add a new customer to MySQL
 app.post('/customers', (req, res) => {
   const { FirstName, LastName, Email, Phone } = req.body;
 
-  // Validate required fields
   if (!FirstName || !LastName || !Email || !Phone) {
     return res.status(400).json({ error: 'All fields are required' });
   }
@@ -71,11 +90,13 @@ app.post('/customers', (req, res) => {
   `;
   pool.query(query, [FirstName, LastName, Email, Phone], (err, results) => {
     if (err) {
+      if (err.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({ error: 'Email already exists' }); // Handle duplicates
+      }
       console.error('Error adding customer:', err);
-      res.status(500).send('Error adding customer');
-    } else {
-      res.status(201).json({ id: results.insertId, FirstName, LastName, Email, Phone });
+      return res.status(500).json({ error: 'Internal Server Error' });
     }
+    res.status(201).json({ id: results.insertId, FirstName, LastName, Email, Phone });
   });
 });
 
@@ -86,7 +107,8 @@ app.put('/customers/:id', (req, res) => {
 
   // Ensure all required fields are provided
   if (!FirstName || !LastName || !Email || !Phone) {
-    return res.status(400).send('All fields are required');
+    console.error('Validation error: All fields are required');
+    return res.status(400).json({ error: 'All fields are required' });
   }
 
   const query = `
@@ -98,11 +120,13 @@ app.put('/customers/:id', (req, res) => {
   pool.query(query, [FirstName, LastName, Email, Phone, id], (err, results) => {
     if (err) {
       console.error('Error updating customer:', err);
-      res.status(500).send('Error updating customer');
+      return res.status(500).json({ error: 'Error updating customer' });
     } else if (results.affectedRows === 0) {
-      res.status(404).send('Customer not found');
+      console.error('Customer not found:', id);
+      return res.status(404).json({ error: 'Customer not found' });
     } else {
-      res.send('Customer updated successfully');
+      console.log('Customer updated successfully:', id);
+      res.json({ message: 'Customer updated successfully' });
     }
   });
 });
@@ -123,6 +147,7 @@ app.delete('/customers/:id', (req, res) => {
   });
 });
 
+// GET: Search for customers by phone, name, or email
 app.get('/customers/search', (req, res) => {
   const { phone, name, email } = req.query; // Extract phone, name, and email from query params
   let query = 'SELECT * FROM customers WHERE 1=1'; // Base query
