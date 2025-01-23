@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Route, Routes, useNavigate } from 'react-router-dom';
 import { CSVLink } from 'react-csv';
 import CustomerProfile from './components/CustomerProfile';
@@ -46,16 +46,15 @@ const App = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
+  const [uploadStatus, setUploadStatus] = useState('');
+  const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const loadCustomers = async () => {
-      const data = await fetchCustomers(searchTerm, currentPage, pageSize);
-      setCustomers(data);
-      setTotalPages(Math.ceil(data.length / pageSize));
-    };
-    loadCustomers();
-  }, [searchTerm, currentPage, pageSize]);
+  const loadCustomers = async () => {
+    const data = await fetchCustomers(searchTerm, currentPage, pageSize);
+    setCustomers(data);
+    setTotalPages(Math.ceil(data.length / pageSize));
+  };
 
   const handleAddCustomer = () => {
     navigate('/add-customer');
@@ -70,6 +69,47 @@ const App = () => {
     const data = await fetchCustomers(searchTerm, currentPage, pageSize);
     setCustomers(data);
   };
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    
+    if (!file) {
+      setUploadStatus('No file selected');
+      return;
+    }
+  
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setUploadStatus('Please select a CSV file');
+      return;
+    }
+  
+    const formData = new FormData();
+    formData.append('file', file);
+  
+    try {
+      setUploadStatus('Uploading...');
+      const response = await fetch(`${BASE_URL}/customers/upload`, {
+        method: 'POST',
+        body: formData
+      });
+  
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Upload failed');
+      }
+  
+      setUploadStatus(`Successfully uploaded ${result.inserted} customers`);
+      await loadCustomers(); // Use await here
+    } catch (error) {
+      console.error('Upload error:', error);
+      setUploadStatus(`Upload failed: ${error.message}`);
+    }
+  };
+
+  useEffect(() => {
+    loadCustomers();
+  }, [searchTerm, currentPage, pageSize]);
 
   return (
     <Routes>
@@ -87,14 +127,18 @@ const App = () => {
           <ul>
             {customers.map((customer) => (
               <li key={customer.CustomerID}>
-                {`${customer.FirstName} ${customer.LastName}`} (
-                {customer.Email}, {customer.Phone})
-                <button onClick={() => handleEditCustomer(customer.CustomerID)}>
-                  Edit
-                </button>
-                <button onClick={() => handleDeleteCustomer(customer.CustomerID)}>
-                  Delete
-                </button>
+                <div>
+                  <strong>ID:</strong> {customer.CustomerID} |
+                  <strong>Join Date:</strong> {customer.DateToJoin} |
+                  <strong>Name:</strong> {customer.FirstName} {customer.LastName} |
+                  <strong>Email:</strong> {customer.Email} |
+                  <strong>Phone:</strong> {customer.Phone} |
+                  <strong>Address:</strong> {customer.Address}, {customer.City}, {customer.State} {customer.PostalCode}, {customer.Country}
+                </div>
+                <div>
+                  <button onClick={() => handleEditCustomer(customer.CustomerID)}>Edit</button>
+                  <button onClick={() => handleDeleteCustomer(customer.CustomerID)}>Delete</button>
+                </div>
               </li>
             ))}
           </ul>
@@ -129,16 +173,44 @@ const App = () => {
           <CSVLink
             data={customers}
             headers={[
+              { label: "Customer ID", key: "CustomerID" },
+              { label: "Join Date", key: "DateToJoin" },
               { label: "First Name", key: "FirstName" },
               { label: "Last Name", key: "LastName" },
               { label: "Email", key: "Email" },
               { label: "Phone", key: "Phone" },
-              { label: "Customer ID", key: "CustomerID" },
+              { label: "Address", key: "Address" },
+              { label: "City", key: "City" },
+              { label: "State", key: "State" },
+              { label: "Postal Code", key: "PostalCode" },
+              { label: "Country", key: "Country" }
             ]}
             filename="customers.csv"
           >
             Export to CSV
           </CSVLink>
+
+          {/* Add CSV upload button */}
+          <div className="upload-section">
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleFileUpload}
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+            />
+            <button 
+              onClick={() => fileInputRef.current.click()}
+              className="upload-button"
+            >
+              Upload CSV
+            </button>
+            {uploadStatus && (
+              <div className="upload-status">
+                {uploadStatus}
+              </div>
+            )}
+          </div>
 
           {/* Add Customer */}
           <button onClick={handleAddCustomer}>Add Customer</button>

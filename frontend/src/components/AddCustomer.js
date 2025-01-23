@@ -1,84 +1,144 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const BASE_URL = 'http://localhost:3000';
-
 const AddCustomer = () => {
   const navigate = useNavigate();
-  const [customer, setCustomer] = useState({
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
     FirstName: '',
     LastName: '',
     Email: '',
-    Phone: ''
+    Phone: '',
+    Address: '',
+    City: '',
+    State: '',
+    PostalCode: '',
+    Country: ''
   });
-  const [error, setError] = useState(null);
 
-  const handleSave = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
     try {
-      const url = `${BASE_URL}/customers`;
-      console.log('Saving new customer data to:', url); // Debugging log
-      console.log('Customer data being saved:', customer); // Debugging log
-      const response = await fetch(url, {
+      const response = await fetch('http://localhost:3000/customers', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(customer),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
       });
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to add customer');
       }
-      console.log('Customer added successfully'); // Debugging log
+
+      const result = await response.json();
+      
+      if (!result.CustomerID || !result.DateToJoin) {
+        throw new Error('Invalid server response');
+      }
+
       navigate('/');
     } catch (error) {
-      console.error('Error adding customer:', error); // Debugging log
-      setError(error.message);
+      console.error('Error in handleSubmit:', error);
+      setError(error.message || 'An error occurred');
+    } finally {
+      setLoading(false);
     }
   };
 
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
   return (
-    <div>
-      <h1>Add New Customer</h1>
-      <form>
-        <label htmlFor="firstName">First Name:</label>
+    <form onSubmit={handleSubmit}>
+      {error && <div className="error-message">{error}</div>}
+      <div>
         <input
-          type="text"
-          id="firstName"
-          name="firstName"
-          value={customer.FirstName}
-          onChange={(e) => setCustomer({ ...customer, FirstName: e.target.value })}
+          name="FirstName"
+          value={formData.FirstName}
+          onChange={handleChange}
+          placeholder="First Name"
+          required
         />
-        <br />
-        <label htmlFor="lastName">Last Name:</label>
+      </div>
+      <div>
         <input
-          type="text"
-          id="lastName"
-          name="lastName"
-          value={customer.LastName}
-          onChange={(e) => setCustomer({ ...customer, LastName: e.target.value })}
+          name="LastName"
+          value={formData.LastName}
+          onChange={handleChange}
+          placeholder="Last Name"
+          required
         />
-        <br />
-        <label htmlFor="email">Email:</label>
+      </div>
+      <div>
         <input
+          name="Email"
           type="email"
-          id="email"
-          name="email"
-          value={customer.Email}
-          onChange={(e) => setCustomer({ ...customer, Email: e.target.value })}
+          value={formData.Email}
+          onChange={handleChange}
+          placeholder="Email"
+          required
         />
-        <br />
-        <label htmlFor="phone">Phone:</label>
+      </div>
+      <div>
         <input
-          type="text"
-          id="phone"
-          name="phone"
-          value={customer.Phone}
-          onChange={(e) => setCustomer({ ...customer, Phone: e.target.value })}
+          name="Phone"
+          value={formData.Phone}
+          onChange={handleChange}
+          placeholder="Phone"
+          required
         />
-        <br />
-        <button type="button" onClick={handleSave}>Save</button>
-      </form>
-      {error && <div>Error: {error}</div>}
-    </div>
+      </div>
+      <div>
+        <input
+          name="Address"
+          value={formData.Address}
+          onChange={handleChange}
+          placeholder="Address"
+        />
+      </div>
+      <div>
+        <input
+          name="City"
+          value={formData.City}
+          onChange={handleChange}
+          placeholder="City"
+        />
+      </div>
+      <div>
+        <input
+          name="State"
+          value={formData.State}
+          onChange={handleChange}
+          placeholder="State"
+        />
+      </div>
+      <div>
+        <input
+          name="PostalCode"
+          value={formData.PostalCode}
+          onChange={handleChange}
+          placeholder="Postal Code"
+        />
+      </div>
+      <div>
+        <input
+          name="Country"
+          value={formData.Country}
+          onChange={handleChange}
+          placeholder="Country"
+        />
+      </div>
+      <button type="submit" disabled={loading}>
+        {loading ? 'Adding...' : 'Add Customer'}
+      </button>
+    </form>
   );
 };
 
