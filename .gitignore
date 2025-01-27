@@ -4,6 +4,8 @@
 /node_modules
 /.pnp
 /backend/node_modules
+/backend/.env
+/backend/db.js
 /frontend/node_modules
 .pnp.js
 .env
